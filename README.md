@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Poker Agents Trading Bot
 
 This project is a way to evaluate the best strategies for trading on financial markets. It will revolve around four main playstyles: Loose-Aggressive, Loose-Passive, Tight-Aggressive, and Tight-Passive.
