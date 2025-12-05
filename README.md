@@ -256,4 +256,3 @@ For questions, suggestions, or collaboration opportunities:
 ---
 
 **Note**: This is a simulation for educational and research purposes. Past performance does not guarantee future results. Always conduct thorough research before implementing real trading strategies.
->>>>>>> a828da8 (Finished Code, Poker Trading Bot)
