@@ -232,7 +232,7 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 ## Acknowledgments
 
 - Special word of thanks to Prof. (Dr.) Ankush Garg who helped me flesh out the initial game theory aspect of the project, without his help I would not have been able to start the project!
-- Inspired by poker strategy literature (Harrington, Sklansky, etc.)
+- Inspired by poker strategy literature (Frączek, Lainas, Li, etc.)
 - Quantitative finance community for trading metrics and best practices
 - Behavioral economics research on decision-making under uncertainty
 
