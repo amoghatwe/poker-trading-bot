@@ -241,7 +241,7 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 
 For questions, suggestions, or collaboration opportunities:
 - Open an issue on GitHub
-- Email: [amoghatwe@gmail.com]
+- Email: [mailto:amoghatwe@gmail.com](mailto:amoghatwe@gmail.com)
 
 ## 🔮 Future Enhancements
 
