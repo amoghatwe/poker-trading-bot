@@ -161,8 +161,15 @@ Each trader makes decisions based on:
 
 ## 🎓 Insights & Findings
 
-Based on the seeded run (seed 42, 10bps/side) and its zero-cost baseline,
-with dollar-accurate P&L (share sizing fixed) and daily mark-to-market equity:
+Findings below combine the single seeded run (seed 42, 10bps/side, zero-cost
+baseline) with a 200-seed Monte Carlo (same costs and horizon) for
+robustness. Dollar-accurate P&L (share sizing fixed) and daily
+mark-to-market equity throughout.
+
+### Single seeded run (seed 42)
+
+The seeded run illustrates the mechanism but is one path — treat it as
+anecdote, not evidence. Across seeds the picture is noisier (see below).
 
 1. **TAG wins on every metric after costs**: best P&L (+$46.64, the only
    positive), best win rate (47.5%), best Sharpe (0.22), smallest drawdown
@@ -191,6 +198,36 @@ with dollar-accurate P&L (share sizing fixed) and daily mark-to-market equity:
    were shares, inflating P&L ~100× (returns like −115%). With true dollar
    P&L, all returns here fall in −2.2%..+0.5% and drawdowns in −1%..−3.2%,
    consistent with ~2–5% of capital at risk per trade.
+
+
+### Monte Carlo across 200 seeds (10bps/side, 252 days, \$10k)
+
+| Style | Median P\&L | Mean P\&L | SD | Seeds positive | Median Sharpe | TAG beats it |
+|---|---|---|---|---|---|---|
+| Loose-Passive | −2.2bps | −1.9bps | 3.9bps | 49/200 | −0.54 | 134/200 |
+| Loose-Aggressive | −1.3bps | −1.1bps | 2.8bps | 65/200 | −0.54 | 105/200 |
+| Tight-Passive | −1.1bps | −1.0bps | 2.3bps | 61/200 | −0.49 | 109/200 |
+| Tight-Aggressive | −0.7bps | −0.7bps | 1.9bps | 71/200 | −0.33 | — |
+
+6. **All styles lose on average — the market drift does not reward any style**:
+   every style's median P\&L is negative once 10bps/side costs are applied.
+   TAG loses least (−0.7bps median vs −1.0 to −2.2 for the others) and wins
+   head-to-head against each style in 105–134 of 200 seeds, but it is
+   overall #1 by P\&L in only 64/200 seeds and sole positive style in only
+   14/200. The honest summary: under this model, no style is profitable;
+   TAG is merely the least-bad, with the most consistent (lowest-variance)
+   results.
+
+7. **Seed-42's "TAG wins on every metric" is not robust**: a single seed
+   flips the picture. Margin vs next-best style: median −0.74bps, p25
+   −2.22bps, p75 +0.44bps (negative = TAG behind). Presenting the seeded
+   run as the headline would overstate a coin-flip ranking into a finding.
+
+8. **What survives across seeds**: cost discipline (fewer, larger trades →
+   lower total friction) and lower return variance for tight styles —
+   SD 1.9–2.3bps vs 2.8–3.9bps for loose. What does not survive: any claim
+   that a style is profitable, or that TAG reliably beats all others on
+   absolute P\&L.
 
 ## 🛠️ Extending the Project
 
