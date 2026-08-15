@@ -53,6 +53,7 @@ class Trade:
     size: float
     profit_loss: float
     duration: int  # periods held
+    transaction_cost: float = 0.0  # round-trip cost deducted from P&L
 
     def __str__(self) -> str:
         return (f"{self.position_type} @ {self.entry_price:.2f} → "
@@ -78,6 +79,7 @@ class TraderStats:
     avg_loss: float
     profit_factor: float
     sharpe_ratio: float
+    total_transaction_costs: float = 0.0
 
     def __str__(self) -> str:
         return f"""
@@ -89,8 +91,8 @@ Total P&L:      ${self.total_pnl:,.2f}
 Max Drawdown:   {self.max_drawdown:.1%}
 Profit Factor:  {self.profit_factor:.2f}x
 Avg Win:        ${self.avg_win:.2f}
-Avg Loss:       ${self.avg_loss:.2f}
 Sharpe Ratio:   {self.sharpe_ratio:.2f}
+Transaction Costs: ${self.total_transaction_costs:,.2f}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
@@ -113,7 +115,8 @@ class TradingStyle(ABC):
         name: str,
         aggressiveness: float,
         responsiveness: float,
-        initial_capital: float = 10000
+        initial_capital: float = 10000,
+        transaction_cost_pct: float = 0.0
     ):
         """
         Initialize a trading style.
@@ -123,11 +126,13 @@ class TradingStyle(ABC):
             aggressiveness: 0.0 (Passive) to 1.0 (Aggressive)
             responsiveness: 0.0 (Tight) to 1.0 (Loose)
             initial_capital: Starting capital
+            transaction_cost_pct: Per-side cost as fraction of notional (e.g. 0.001 = 10bps)
         """
         self.name = name
         self.aggressiveness = aggressiveness
         self.responsiveness = responsiveness
         self.initial_capital = initial_capital
+        self.transaction_cost_pct = transaction_cost_pct
         self.capital = initial_capital
         self.trades: List[Trade] = []
         self.equity_curve: List[float] = [initial_capital]
@@ -192,7 +197,8 @@ class TradingStyle(ABC):
         asset: str = "Stock"
     ) -> None:
         """Execute a new trade."""
-        size = self.position_size()
+        # position_size() returns dollars; convert to shares at entry price
+        size = self.position_size() / entry_price
         position_type = "LONG" if market_condition == MarketCondition.BULLISH else "SHORT"
 
         self.open_positions.append({
@@ -262,6 +268,11 @@ class TradingStyle(ABC):
         else:
             pnl = (entry_price - exit_price) * size
 
+        # Round-trip transaction cost (entry + exit) on notional
+        notional = entry_price * size
+        round_trip_cost = 2 * self.transaction_cost_pct * notional
+        pnl -= round_trip_cost
+
         # Record trade
         trade = Trade(
             timestamp=period,
@@ -271,12 +282,12 @@ class TradingStyle(ABC):
             exit_price=exit_price,
             size=size,
             profit_loss=pnl,
-            duration=period - position['entry_period']
+            duration=period - position['entry_period'],
+            transaction_cost=round_trip_cost
         )
 
         self.trades.append(trade)
         self.capital += pnl
-        self.equity_curve.append(self.capital)
         self.open_positions.remove(position)
 
     def get_stats(self) -> TraderStats:
@@ -308,7 +319,6 @@ class TradingStyle(ABC):
         # Sharpe ratio (simplified, assumes risk-free rate = 0)
         returns = np.diff(equity) / equity[:-1] if len(equity) > 1 else np.array([0])
         sharpe = (np.mean(returns) / np.std(returns) * np.sqrt(252)) if np.std(returns) > 0 else 0
-
         return TraderStats(
             trader_name=self.name,
             total_trades=len(self.trades),
@@ -320,7 +330,8 @@ class TradingStyle(ABC):
             avg_win=avg_win,
             avg_loss=avg_loss,
             profit_factor=profit_factor,
-            sharpe_ratio=sharpe
+            sharpe_ratio=sharpe,
+            total_transaction_costs=sum(t.transaction_cost for t in self.trades)
         )
 
 
@@ -419,14 +430,22 @@ class TightAggressiveTrader(TradingStyle):
 class MarketSimulator:
     """Simulates market price movements and runs traders against them."""
 
-    def __init__(self, periods: int = 252, initial_price: float = 100):
+    def __init__(
+        self,
+        periods: int = 252,
+        initial_price: float = 100,
+        transaction_cost_pct: float = 0.0
+    ):
         """
         Args:
             periods: Number of trading periods (typically 252 = 1 year)
             initial_price: Starting price
+            transaction_cost_pct: Per-side cost fraction applied to every trader
+                unless the trader explicitly set its own nonzero cost
         """
         self.periods = periods
         self.initial_price = initial_price
+        self.transaction_cost_pct = transaction_cost_pct
         self.prices: List[float] = [initial_price]
         self.market_conditions: List[MarketCondition] = []
 
@@ -460,6 +479,12 @@ class MarketSimulator:
 
     def run_simulation(self, traders: List[TradingStyle]) -> None:
         """Execute simulation for all traders against market."""
+        # Simulator is the single cost control point: apply its cost to any
+        # trader that didn't explicitly set its own.
+        for trader in traders:
+            if trader.transaction_cost_pct == 0.0:
+                trader.transaction_cost_pct = self.transaction_cost_pct
+
         for period in range(1, len(self.prices)):
             current_price = self.prices[period]
             market_condition = self.market_conditions[period - 1]
@@ -486,6 +511,15 @@ class MarketSimulator:
                     trader.should_enter_trade(market_condition, signal_strength)):
                     trader.execute_trade(current_price, market_condition, period)
 
+                # Daily mark-to-market: capital plus unrealized P&L
+                unrealized = sum(
+                    (current_price - p['entry_price']) * p['size']
+                    if p['position_type'] == "LONG"
+                    else (p['entry_price'] - current_price) * p['size']
+                    for p in trader.open_positions
+                )
+                trader.equity_curve.append(trader.capital + unrealized)
+
 
 # ============================================================================
 # ANALYSIS UTILITIES
@@ -499,16 +533,17 @@ def print_comparison_table(traders: List[TradingStyle]) -> None:
     print("TRADER COMPARISON ANALYSIS")
     print("="*80)
 
-    headers = ["Trader", "Trades", "Win %", "Total P&L", "Return", "Max DD", "Profit Factor"]
+    headers = ["Trader", "Trades", "Win %", "Total P&L", "Return", "Max DD",
+               "Profit Factor", "Costs"]
     print(f"{headers[0]:<25} {headers[1]:>8} {headers[2]:>8} {headers[3]:>12} "
-          f"{headers[4]:>9} {headers[5]:>9} {headers[6]:>12}")
-    print("-" * 80)
+          f"{headers[4]:>9} {headers[5]:>9} {headers[6]:>12} {headers[7]:>10}")
+    print("-" * 92)
 
     for trader, stats in zip(traders, stats_list):
         pf = f"{stats.profit_factor:.2f}x" if stats.profit_factor != float('inf') else "∞"
         print(f"{stats.trader_name:<25} {stats.total_trades:>8} {stats.win_rate:>7.1%} "
               f"${stats.total_pnl:>11,.0f} {stats.total_pnl/10000:>8.1%} "
-              f"{stats.max_drawdown:>8.1%} {pf:>12}")
+              f"{stats.max_drawdown:>8.1%} {pf:>12} ${stats.total_transaction_costs:>9,.0f}")
 
 
 def print_individual_stats(traders: List[TradingStyle]) -> None:
@@ -563,8 +598,7 @@ def main():
     print("="*80)
     print("Simulating 4 trading styles across 252 trading days\n")
 
-    # Create market
-    simulator = MarketSimulator(periods=252, initial_price=100)
+    simulator = MarketSimulator(periods=252, initial_price=100, transaction_cost_pct=0.001)
     simulator.generate_market()
 
     # Create traders
@@ -598,6 +632,20 @@ def main():
     best_sharpe, stats = find_best_trader(traders, "sharpe")
     print(f"\n⚡ Best Risk-Adjusted Return: {best_sharpe.name}")
     print(f"   Sharpe Ratio: {stats.sharpe_ratio:.2f}")
+
+    # Cost impact verdict: does TAG still win after 10bps/side costs?
+    tag = next(t for t in traders if isinstance(t, TightAggressiveTrader))
+    tag_is_best = best_pnl is tag
+    if tag_is_best:
+        print(f"\n✅ VERDICT: {tag.name} still wins after 10bps/side transaction costs")
+    else:
+        print(f"\n⚠️ VERDICT: {best_pnl.name} overtakes {tag.name} after 10bps/side costs")
+
+    costliest = max(traders, key=lambda t: t.get_stats().total_transaction_costs)
+    costliest_stats = costliest.get_stats()
+    print(f"   Most cost-impacted: {costliest.name} "
+          f"(${costliest_stats.total_transaction_costs:,.0f} across "
+          f"{costliest_stats.total_trades} trades)")
 
     print("\n" + "="*80)
     print("SIMULATION COMPLETE")

@@ -1,12 +1,3 @@
-<<<<<<< HEAD
-# Poker Agents Trading Bot
-
-This project is a way to evaluate the best strategies for trading on financial markets. It will revolve around four main playstyles: Loose-Aggressive, Loose-Passive, Tight-Aggressive, and Tight-Passive.
-
-The project will start off evaluating these strategies on a market-simulation.
-
-The project is currently in it's most nascent stage, I will be evaluating the mathematical literature behind these strategies and then apply them through Python and/or C++ at a later stage.
-=======
 # Poker Trading Styles Simulator 🃏📈
 
 A Python-based trading simulator that applies poker playing styles to quantitative trading strategies. This project explores how different poker playing  archetypes perform in simulated financial markets.
@@ -96,6 +87,8 @@ simulator = MarketSimulator(periods=1000, initial_price=150)
 
 ## 📊 Sample Output
 
+Actual output from `python poker_trading.py` (seed 42, 252 days, 10bps/side transaction costs):
+
 ```
 ================================================================================
 POKER TRADING STYLES SIMULATOR
@@ -105,25 +98,28 @@ Simulating 4 trading styles across 252 trading days
 ================================================================================
 TRADER COMPARISON ANALYSIS
 ================================================================================
-Trader                       Trades    Win %    Total P&L    Return    Max DD  Profit Factor
-------------------------------------------------------------------------------------
-Loose-Passive Trader             45    51.1%      $1,234    12.3%    -8.2%         1.45x
-Loose-Aggressive Trader         189    48.7%      $-876    -8.8%   -15.3%         0.82x
-Tight-Passive Trader             12    66.7%      $2,145    21.5%    -4.1%         3.21x
-Tight-Aggressive Trader          38    63.2%      $3,567    35.7%    -5.8%         2.87x
+Trader                      Trades    Win %    Total P&L    Return    Max DD Profit Factor      Costs
+--------------------------------------------------------------------------------------------
+Loose-Passive Trader           158   47.5% $       -129    -1.3%    -3.2%        0.90x $      132
+Loose-Aggressive Trader         74   47.3% $        -72    -0.7%    -2.3%        0.91x $       88
+Tight-Passive Trader           143   46.2% $       -224    -2.2%    -2.4%        0.77x $       85
+Tight-Aggressive Trader         61   47.5% $         47     0.5%    -1.0%        1.10x $       59
 
 ================================================================================
 PERFORMANCE HIGHLIGHTS
 ================================================================================
 
 🏆 Best P&L: Tight-Aggressive Trader
-   Total Profit: $3,567.00 (35.7%)
+   Total Profit: $46.64 (0.5%)
 
-📊 Best Win Rate: Tight-Passive Trader
-   Win Rate: 66.7% (8/12)
+📊 Best Win Rate: Tight-Aggressive Trader
+   Win Rate: 47.5% (29/61)
 
 ⚡ Best Risk-Adjusted Return: Tight-Aggressive Trader
-   Sharpe Ratio: 1.89
+   Sharpe Ratio: 0.22
+
+✅ VERDICT: Tight-Aggressive Trader still wins after 10bps/side transaction costs
+   Most cost-impacted: Loose-Passive Trader ($132 across 158 trades)
 ```
 
 ## 🧠 Methodology
@@ -139,6 +135,7 @@ Each trader makes decisions based on:
 2. **Position Sizing**:
    - Base risk: 2% of capital
    - Adjusted by aggressiveness (+0-3%) and looseness (+0-2%)
+   - Dollar risk converted to shares at entry price
 
 3. **Exit Logic**:
    - Profit targets (3-8% depending on style)
@@ -150,6 +147,7 @@ Each trader makes decisions based on:
 - **Model**: Geometric Brownian motion
 - **Parameters**: 0.05% daily drift, 2% volatility
 - **Conditions**: BULLISH, BEARISH, NEUTRAL based on 5-period lookback
+- **Equity curve**: marked to market daily (capital + unrealized P&L); Sharpe and drawdown are computed from daily returns
 
 ## 📈 Performance Metrics
 
@@ -159,30 +157,40 @@ Each trader makes decisions based on:
 | **Win Rate** | Percentage of profitable trades |
 | **Total P&L** | Net profit/loss in dollars |
 | **Return** | P&L as percentage of initial capital |
-| **Max Drawdown** | Largest peak-to-trough decline |
-| **Profit Factor** | Gross profit / Gross loss |
 | **Sharpe Ratio** | Risk-adjusted return (annualized) |
 
 ## 🎓 Insights & Findings
 
-Based on typical simulation runs:
+Based on the seeded run (seed 42, 10bps/side) and its zero-cost baseline,
+with dollar-accurate P&L (share sizing fixed) and daily mark-to-market equity:
 
-1. **Tight-Aggressive** (TAG) style typically outperforms:
-   - Highest absolute returns
-   - Best risk-adjusted performance
-   - Moderate trade frequency
+1. **TAG wins on every metric after costs**: best P&L (+$46.64, the only
+   positive), best win rate (47.5%), best Sharpe (0.22), smallest drawdown
+   (−1.0%). It also led at zero cost (+$105.61) — costs didn't flip the
+   ranking, they halved TAG's edge.
 
-2. **Loose-Aggressive** often underperforms:
-   - High transaction costs from overtrading
-   - Low signal quality leads to poor outcomes
+2. **Costs flip the loose styles from profit to loss**: LP +$2.78 → −$129.14,
+   LAG +$16.55 → −$71.97. Their zero-cost profits were smaller than their
+   cost drag ($132 and $88 respectively). This is the classic overtrading
+   failure mode — marginal edges don't survive realistic friction.
 
-3. **Tight-Passive** shows promise but limits upside:
-   - High win rate but fewer opportunities
-   - Low drawdowns but capped returns
+3. **Total costs track trade count, not style**: LP pays the most ($132 over
+   158 trades) despite the smallest average position; TAG pays the least
+   ($59 over 61 trades) because it trades least often. Per-trade cost runs
+   $0.59–$1.19, ≈20bps on average position notional ($300–$600).
 
-4. **Loose-Passive** exhibits inconsistent results:
-   - Moderate performance
-   - Lacks clear edge
+4. **Net P&L impact is path-dependent**: `position_size()` scales with
+   capital, so cost drag shrinks subsequent positions. Every style's costed
+   P&L is lower than its zero-cost P&L, but by less than its total costs
+   (TAG: −$58.97 net vs $58.54 costs) — the sizing feedback cushions part
+   of the drag. The cost mechanic itself is exact (unit-tested: $100 → $80
+   on $1,000 notional at 1%/side).
+
+5. **Earlier "TAG wins big" sample outputs were artifacts of a sizing bug**:
+   the prior code multiplied a dollar position by price change as if it
+   were shares, inflating P&L ~100× (returns like −115%). With true dollar
+   P&L, all returns here fall in −2.2%..+0.5% and drawdowns in −1%..−3.2%,
+   consistent with ~2–5% of capital at risk per trade.
 
 ## 🛠️ Extending the Project
 
@@ -247,14 +255,8 @@ For questions, suggestions, or collaboration opportunities:
 
 - [ ] Add machine learning-based adaptive strategies
 - [ ] Implement multi-asset portfolio simulation
-- [ ] Include transaction costs and slippage
-- [ ] Add visualization dashboard (matplotlib/plotly)
-- [ ] Implement Monte Carlo simulations for robustness testing
-- [ ] Add regime detection (bull/bear market identification)
-- [ ] Integrate real market data (via yfinance or similar)
-- [ ] Create web interface for interactive simulations
+- [x] Include transaction costs and slippage (round-trip cost model, configurable via `transaction_cost_pct`)
 
 ---
 
 **Note**: This is a simulation for educational and research purposes. Past performance does not guarantee future results. Always conduct thorough research before implementing real trading strategies.
->>>>>>> a828da8 (Finished Code, Poker Trading Bot)
