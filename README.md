@@ -1,6 +1,6 @@
 # Poker Trading Styles Simulator 🃏📈
 
-A Python-based trading simulator that applies poker playing styles to quantitative trading strategies. This project explores how different poker playing  archetypes perform in simulated financial markets.
+A Python-based trading simulator that applies poker playing styles to quantitative trading strategies. This project explores how different poker playing archetypes perform in simulated financial markets.
 
 ## Project Overview
 
@@ -31,8 +31,8 @@ This simulator models four distinct trading styles based on a 2x2 matrix:
 
 ```bash
 # Clone the repository
-git clone https://github.com/amoghatwe/poker-trading-simulator.git
-cd poker-trading-simulator
+git clone https://github.com/amoghatwe/poker-trading-bot.git
+cd poker-trading-bot
 
 # Install dependencies
 pip install -r requirements.txt
